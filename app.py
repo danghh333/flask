@@ -119,7 +119,7 @@ def demo_preview():
     response = {'demo_preview_path': output_path}
     return jsonify(response)
 
-@app.route('/predict')
+@app.route('/predict', methods=['POST'])
 def demo_predict():
     # Provide the HSI path parameters
     hdr_path = '/home/student4/HSI/Hyper-Spectral/hyper_20220326_3cm.hdr'
