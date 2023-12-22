@@ -1,0 +1,13 @@
+version: '3'
+services:
+  flask-app:
+    build: .
+    ports:
+      - "5555:5555"
+    volumes:
+      - ./RGB_output:/app/RGB_output
+      - ./predict_output:/app/predict_output
+    environment:
+      - FLASK_APP=app.py
+      - FLASK_RUN_HOST=0.0.0.0
+      - FLASK_RUN_PORT=5555

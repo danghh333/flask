@@ -16,14 +16,14 @@ os.environ['CUDA_VISIBLE_DEVICES'] = '-1'  # Use CPU for Flask app
 app = Flask(__name__)
 
 # Load pre-trained model
-model = load_model('/home/student4/Test/Flask/checkpoint.h5')
+model = load_model('checkpoint.h5')
 
 # Set the upload folder and allowed extensions
-UPLOAD_FOLDER = '/home/student4/Test/Flask/Upload' # Path to save RGB image after user uploaded
-PREDICT_FOLDER = '/home/student4/Test/Flask/Predict' # Path to save predicted image after user uploaded
+RGB_FOLDER = 'RGB_output' # Path to save RGB image after user uploaded
+PREDICT_FOLDER = 'predict_output' # Path to save predicted image after user uploaded
 ALLOWED_EXTENSIONS = {'hdr', 'img'}
 
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['RGB_FOLDER'] = RGB_FOLDER
 app.config['PREDICT_FOLDER'] = PREDICT_FOLDER
 
 def allowed_file(filename):
@@ -106,24 +106,24 @@ def preprocess_and_predict(model, hdr_path, img_path):
 @app.route('/preview')
 def demo_preview():
     # Provide the HSI path parameters
-    hdr_path = '/home/student4/HSI/Hyper-Spectral/hyper_20220326_3cm.hdr'
-    img_path = '/home/student4/HSI/Hyper-Spectral/hyper_20220326_3cm.img'
+    hdr_path = '/home/student4/HSI/Hyper-Spectral/hyper_20220326_3cm.hdr' #Actual path
+    img_path = '/home/student4/HSI/Hyper-Spectral/hyper_20220326_3cm.img' #Actual path
 
     preview_image = preview(hdr_path, img_path)
 
     # Save the preview image as a PNG file
-    output_path = os.path.join(app.config['UPLOAD_FOLDER'], 'demo_preview.png')
+    output_path = os.path.join(app.config['RGB_FOLDER'], 'demo_preview.png')
     plt.imsave(output_path, preview_image)
 
     # Return the path to the saved PNG file in the response
     response = {'demo_preview_path': output_path}
     return jsonify(response)
 
-@app.route('/predict', methods=['POST'])
+@app.route('/predict')
 def demo_predict():
     # Provide the HSI path parameters
-    hdr_path = '/home/student4/HSI/Hyper-Spectral/hyper_20220326_3cm.hdr'
-    img_path = '/home/student4/HSI/Hyper-Spectral/hyper_20220326_3cm.img'
+    hdr_path = '/home/student4/HSI/Hyper-Spectral/hyper_20220326_3cm.hdr' #Actual path
+    img_path = '/home/student4/HSI/Hyper-Spectral/hyper_20220326_3cm.img' #Actual path
 
     # Perform model prediction
     predicted_mask = preprocess_and_predict(model, hdr_path, img_path)
