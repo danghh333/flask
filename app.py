@@ -6,6 +6,8 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 import spectral as sp
+from keras.models import load_model
+from tensorflow.keras.optimizers import Adam
 
 import tensorflow as tf
 os.environ['CUDA_VISIBLE_DEVICES'] = '-1'  # Use CPU for Flask app
@@ -16,11 +18,14 @@ os.environ['CUDA_VISIBLE_DEVICES'] = '-1'  # Use CPU for Flask app
 app = Flask(__name__)
 
 # Load pre-trained model
-model = load_model('checkpoint.h5')
+#custom_objects = {'Adam': Adam(learning_rate=0.0005)}
+model_path = '/home/student4/Test/Flask/checkpoint.h5'
+model = load_model(model_path,  compile=False)
+#model = load_model('/home/student4/Test/Flask/checkpoint.h5')
 
 # Set the upload folder and allowed extensions
-RGB_FOLDER = 'RGB_output' # Path to save RGB image after user uploaded
-PREDICT_FOLDER = 'predict_output' # Path to save predicted image after user uploaded
+RGB_FOLDER = '/home/student4/Test/Flask/RGB_output' # Path to save RGB image after user uploaded
+PREDICT_FOLDER = '/home/student4/Test/Flask/predict_output' # Path to save predicted image after user uploaded
 ALLOWED_EXTENSIONS = {'hdr', 'img'}
 
 app.config['RGB_FOLDER'] = RGB_FOLDER
@@ -85,7 +90,7 @@ def preprocess_and_predict(model, hdr_path, img_path):
     img = sp.open_image(hdr_path)
 
     # Crop and stack bands
-    cropped_array = crop_and_stack_bands(img, start_x=4000, start_y=4000)
+    cropped_array = crop_and_stack_bands(img, start_x=3000, start_y=4000)
 
     # PCA
     pca = PCA(30)
@@ -129,8 +134,8 @@ def demo_predict():
     predicted_mask = preprocess_and_predict(model, hdr_path, img_path)
 
     # Save the predicted mask as a PNG file
-    predict_path = os.path.join(app.config['PREDICT_FOLDER'], 'demo_predict.png')
-    plt.imsave(predict_path, np.argmax(predicted_mask, axis=-1), cmap='jet')
+    predict_path = os.path.join(app.config['PREDICT_FOLDER'], 'demo_predict2.png')
+    plt.imsave(predict_path, np.argmax(predicted_mask, axis=-1))
 
     # Return the paths to the saved PNG files in the response
     response = {
