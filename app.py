@@ -1,32 +1,48 @@
+from datetime import datetime
 from flask import Flask, request, jsonify
 from tensorflow.keras.models import load_model
+from tensorflow.keras.optimizers import Adam
 from skimage import color
 from sklearn.decomposition import PCA
 import os
 import numpy as np
 import matplotlib.pyplot as plt
 import spectral as sp
-from keras.models import load_model
-from tensorflow.keras.optimizers import Adam
+import logging
+from flask import Flask, request
+import traceback
+
 
 import tensorflow as tf
 os.environ['CUDA_VISIBLE_DEVICES'] = '-1'  # Use CPU for Flask app
 
-app = Flask(__name__)
+
+
+app = Flask(_name_)
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+
+@app.before_request
+def log_request_info():
+    app.logger.info('Headers: %s', request.headers)
+    app.logger.info('Body: %s', request.get_data())
+
+@app.after_request
+def log_response_info(response):
+    app.logger.info('Response status: %s', response.status)
+    return response
 
 # Load pre-trained model
-model_path = '/home/student4/Test/Flask/checkpoint.h5'
-model = load_model(model_path,  compile=False)
+model = load_model('checkpoint_294_.h5', compile=False)
 
 # Set the upload folder and allowed extensions
-UPLOAD_FOLDER = '/home/student4/Test/Flask/user_upload'
-RGB_FOLDER = '/home/student4/Test/Flask/RGB_output' # Path to save RGB image after user uploaded
-PREDICT_FOLDER = '/home/student4/Test/Flask/predict_output' # Path to save predicted image after user uploaded
+RGB_FOLDER = 'D:\\img\\preview_output'# Path to save RGB image after user uploaded
+PREDICT_FOLDER = 'D:\\img\\predict_output' # Path to save predicted image after user uploaded
 ALLOWED_EXTENSIONS = {'hdr', 'img'}
 
 app.config['RGB_FOLDER'] = RGB_FOLDER
 app.config['PREDICT_FOLDER'] = PREDICT_FOLDER
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -67,10 +83,6 @@ def crop_and_stack_bands(img, crop_size=144, start_x=None, start_y=None):
             start_x = current_band.shape[0] // 2 - crop_size // 2
         if start_y is None:
             start_y = current_band.shape[1] // 2 - crop_size // 2
-        
-        # Ensure that the provided start_x and start_y are within valid range
-        start_x = max(0, min(start_x, current_band.shape[0] - crop_size))
-        start_y = max(0, min(start_y, current_band.shape[1] - crop_size))
 
         # Calculate the cropping boundaries
         end_x = start_x + crop_size
@@ -86,12 +98,12 @@ def crop_and_stack_bands(img, crop_size=144, start_x=None, start_y=None):
     cropped_bands = np.stack(cropped_bands_list, axis=-1)
     return cropped_bands
 
-def preprocess_and_predict(model, hdr_path, img_path):
+def preprocess_and_predict(model, hdr_path, img_path, x, y):
     # Load the hyperspectral image
     img = sp.open_image(hdr_path)
 
     # Crop and stack bands
-    cropped_array = crop_and_stack_bands(img, start_x=start_x, start_y=start_y)
+    cropped_array = crop_and_stack_bands(img, start_x= x, start_y= y)
 
     # PCA
     pca = PCA(30)
@@ -109,75 +121,115 @@ def preprocess_and_predict(model, hdr_path, img_path):
     return predictions[0]
 
 
+# @app.route('/preview')
+# def demo_preview():
+#     # Provide the HSI path parameters
+#     hdr_path = 'D:\img\hyper_20220326_3cm.hdr' #Actual path
+#     img_path = 'D:\img\hyper_20220326_3cm.img' #Actual path
+
+#     preview_image = preview(hdr_path, img_path)
+
+#     # Save the preview image as a PNG file
+#     output_path = os.path.join(app.config['RGB_FOLDER'], 'demo_preview.png')
+#     plt.imsave(output_path, preview_image)
+
+#     # Return the path to the saved PNG file in the response
+#     response = {'demo_preview_path': output_path}
+#     return jsonify(response)
+
 @app.route('/preview', methods=['POST'])
 def demo_preview():
-    # Provide the HSI path parameters
-    if 'file' not in request.files:
-        return jsonify({'error': 'No file part'})
-    
-    file = request.files['file']
+    try:
+        # Extract HSI path parameters from the request body as JSON
+        data = request.get_json()
 
-    #Check if the file is selected
-    if file.filename == '':
-        return jsonify({'error': 'No selected file'})
+        # Check if the required fields are present in the JSON data
+        if not all(key in data for key in ['img_path', 'hdr_path']):
+            return jsonify({'error': 'Invalid JSON data. Both "img_path" and "hdr_path" are required.'}), 400
 
-    #Check if the file has an allowed extension
-    if file and allowed_file(file.filename):
-        # Save the uploaded file
-        upload_path = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
-        file.save(upload_path)
+        # Provide the HSI path parameters
+        hdr_path = data['hdr_path']
+        img_path = data['img_path']
 
-        # Perform HSI preview using the uploaded file
-        preview_image = preview(upload_path, upload_path)
+        # Check if files exist
+        if not (os.path.exists(hdr_path) and os.path.exists(img_path)):
+            return jsonify({'error': 'Invalid file paths.'}), 400
+
+        # Perform preview
+        preview_image = preview(hdr_path, img_path)
 
         # Save the preview image as a PNG file
-        output_path = os.path.join(app.config['RGB_FOLDER'], 'demo_preview.png')
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        output_path = os.path.join(app.config['RGB_FOLDER'], f'demo_preview_{timestamp}.png')
         plt.imsave(output_path, preview_image)
 
         # Return the path to the saved PNG file in the response
         response = {'demo_preview_path': output_path}
         return jsonify(response)
+
+    except Exception as e:
+        app.logger.error('An error occurred: %s', str(e))
+        app.logger.error('Traceback: %s', traceback.format_exc())
+        return jsonify({'error': str(e)}), 500
+
+# @app.route('/predict')
+# def demo_predict():
+#     # Provide the HSI path parameters
+#     hdr_path = 'D:\img\hyper_20220326_3cm.hdr' #Actual path
+#     img_path = 'D:\img\hyper_20220326_3cm.img' #Actual path
+
+#     # Perform model prediction
+#     predicted_mask = preprocess_and_predict(model, hdr_path, img_path)
+
+#     # Save the predicted mask as a PNG file
+#     predict_path = os.path.join(app.config['PREDICT_FOLDER'], 'demo_predict.png')
+#     plt.imsave(predict_path, np.argmax(predicted_mask, axis=-1), cmap='jet')
+
+#     # Return the paths to the saved PNG files in the response
+#     response = {
+#         'demo_predict_path': predict_path
+#     }
+#     return jsonify(response)
     
-    return jsonify({'error': 'Invalid file extension'})
-
-
-@app.route('/predict', methods=['POST'])
+@app.route('/predict', methods = ['POST'])
 def demo_predict():
-    # Check if the post request has the file part
-    if 'file' not in request.files:
-        return jsonify({'error': 'No file part'})
-
-    file = request.files['file']
-
-    # Check if a file is selected
-    if file.filename == '':
-        return jsonify({'error': 'No selected file'})
-
-    # Check if the file has an allowed extension
-    if file and allowed_file(file.filename):
-        # Save the uploaded file
-        upload_path = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
-        file.save(upload_path)
-
-        # Get user-provided start_x and start_y values from request parameters
+    try:
+         # Extract HSI path parameters from the request body as JSON
         data = request.get_json()
-        start_x = int(data.get('start_x', default=0))
-        start_y = int(data.get('start_y', default=0))
 
-    
-        # Perform model prediction using the uploaded file
-        predicted_mask = preprocess_and_predict(model, upload_path, upload_path, start_x=start_x, start_y=start_y)
+        # Check if the required fields are present in the JSON data
+        if not all(key in data for key in ['img_path', 'hdr_path', 'x', 'y']):
+            return jsonify({'error': 'Invalid JSON data. All "img_path","hdr_path","x","y" are required.'}), 400
+        
+        # Provide the HSI path parameters
+        hdr_path = data['hdr_path']
+        img_path = data['img_path']
+        x = int(data['x'])
+        y = int(data['y'])
+
+        # Check if files exist
+        if not (os.path.exists(hdr_path) and os.path.exists(img_path)):
+            return jsonify({'error': 'Invalid file paths.'}), 400
+        
+        # Perform model prediction 
+        predicted_mask = preprocess_and_predict(model,hdr_path,img_path,x,y)
 
         # Save the predicted mask as a PNG file
-        predict_path = os.path.join(app.config['PREDICT_FOLDER'], 'demo_predict.png')
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        predict_path = os.path.join(app.config['PREDICT_FOLDER'], f'demo_predict_{timestamp}.png')
         plt.imsave(predict_path, np.argmax(predicted_mask, axis=-1))
 
         # Return the paths to the saved PNG files in the response
-        response = {'demo_predict_path': predict_path}
+        response = {
+            'demo_predict_path' : predict_path
+        }
         return jsonify(response)
+    
+    except Exception as e:
+        app.logger.error('An error occurred: %s', str(e))
+        app.logger.error('Traceback: %s', traceback.format_exc())
+        return jsonify({'error': str(e)}), 500
 
-    return jsonify({'error': 'Invalid file extension'})
-
-if __name__ == '__main__':
+if _name_ == '_main_':
     port = 5555
-    app.run(debug=True, port=port)
+    app.run(debug=True, port=port, host = '0.0.0.0')
